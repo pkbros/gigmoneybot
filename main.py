@@ -87,8 +87,11 @@ async def lifespan(app: FastAPI):
     await ptb_app.bot.set_my_commands(commands)
     
     # Set Telegram Webhook
-    logger.info(f"Setting webhook to: {settings.WEBHOOK_URL}")
-    await ptb_app.bot.set_webhook(url=settings.WEBHOOK_URL)
+    if settings.WEBHOOK_URL:
+        logger.info(f"Setting webhook to: {settings.WEBHOOK_URL}")
+        await ptb_app.bot.set_webhook(url=settings.WEBHOOK_URL)
+    else:
+        logger.warning("WEBHOOK_URL not set, skipping set_webhook.")
     
     yield
     

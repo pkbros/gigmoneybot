@@ -54,17 +54,21 @@ async def _execute_search(update: Update, query: str) -> int:
 
         if not results:
             await status_msg.edit_text(
-                f"No one in **{user.college}** has listed that skill yet. 😕\n"
-                "You could be the first — /register",
+                f"No one in **{user.college}** has listed exactly that yet. 😕\n\n"
+                "💡 **Pro-Tip:** Try describing what you need in more detail.\n"
+                "Instead of just 'Math', try 'Help with Calculus integration'.",
                 parse_mode="Markdown"
             )
         else:
             response = f"🔍 **Found {len(results)} students in {user.college} who can help:**\n\n"
             for i, res in enumerate(results, 1):
                 username = f"@{res.username}" if res.username else res.display_name
-                response += f"{i}. {username} — \"{res.skill_text}\" | {res.fee_text}\n"
+                response += f"{i}. {username} — **\"{res.skill_text}\"**\n"
+                if res.description:
+                    response += f"   📝 _{res.description}_\n"
+                response += f"   💰 {res.fee_text}\n\n"
             
-            response += "\nDM them directly on Telegram. Sort out time and payment with them. 👍"
+            response += "DM them directly to get it done! 👍"
             await status_msg.edit_text(response, parse_mode="Markdown")
             
     except Exception as e:

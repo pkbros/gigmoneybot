@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     GCP_PROJECT: str
     VERTEX_LOCATION: str = "us-central1"
-    WEBHOOK_URL: str
+    WEBHOOK_URL: Optional[str] = None # Made optional for initial boot
     PORT: int = 8080
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

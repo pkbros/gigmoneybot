@@ -43,7 +43,7 @@ class DatabaseService:
         try:
             # We explicitly list columns to EXCLUDE 'embedding' which is slow to transfer and hard to parse
             response = self.supabase.table("listings") \
-                .select("id, telegram_id, skill_text, fee_text, college, created_at") \
+                .select("id, telegram_id, skill_text, description, fee_text, college, created_at") \
                 .eq("telegram_id", telegram_id) \
                 .order("created_at") \
                 .execute()
