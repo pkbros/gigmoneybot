@@ -90,4 +90,40 @@ class DatabaseService:
             logger.error(f"Error matching listings: {e}")
             return []
 
+    async def get_all_college_listings(self, college: str, limit: int = 100) -> List[Listing]:
+        """Fetches all listings for a specific college."""
+        try:
+            response = self.supabase.table("listings") \
+                .select("id, telegram_id, skill_text, description, fee_text, college, created_at") \
+                .eq("college", college) \
+                .order("created_at", desc=True) \
+                .limit(limit) \
+                .execute()
+            
+            return [Listing(**item) for item in response.data]
+        except Exception as e:
+            logger.error(f"Error fetching all listings for {college}: {e}")
+            return []
+
+    async def log_search(self, telegram_id: int, username: Optional[str], query: str, college: Optional[str]) -> None:
+        """Logs a search query for analytics."""
+        try:
+            self.supabase.table("search_logs").insert({
+                "telegram_id": telegram_id,
+                "username": username,
+                "query": query,
+                "college": college
+            }).execute()
+        except Exception as e:
+            logger.error(f"Error logging search for {telegram_id}: {e}")
+
+    async def get_all_users(self) -> List[User]:
+        """Fetches all registered users for global broadcasts."""
+        try:
+            response = self.supabase.table("users").select("telegram_id, username, college").execute()
+            return [User(**item) for item in response.data]
+        except Exception as e:
+            logger.error(f"Error fetching all users: {e}")
+            return []
+
 db_service = DatabaseService()

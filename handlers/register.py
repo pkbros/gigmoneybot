@@ -10,22 +10,26 @@ from telegram.ext import (
 from services.db import db_service
 from services.ai import ai_service
 from models.schemas import Listing
-from handlers.base import track_user, check_college
+from handlers.base import track_user, check_college, escape
 
 logger = logging.getLogger(__name__)
 
 # Conversation states
 SKILL_TEXT, DESCRIPTION, FEE = range(3)
 
+async def _cancel_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Async fallback to end conversation."""
+    return ConversationHandler.END
+
 async def start_register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the /register flow."""
     tg_user = update.effective_user
     if not tg_user.username:
         await update.message.reply_text(
-            "❌ **Username Missing**\n\n"
+            "❌ <b>Username Missing</b>\n\n"
             "You need a Telegram @username so others can contact you.\n"
             "Set it in Settings and try again.",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
         return ConversationHandler.END
 
@@ -34,11 +38,11 @@ async def start_register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return ConversationHandler.END
 
     await update.message.reply_text(
-        "✨ **Register a new skill!**\n\n"
-        "1️⃣ **First, give it a short name.**\n"
+        "✨ <b>Register a new skill!</b>\n\n"
+        "1️⃣ <b>First, give it a short name.</b>\n"
         "e.g. 'Java Tutoring', 'Maggi Service'\n"
-        "_(Type /cancel to abort)_",
-        parse_mode="Markdown"
+        "(Type /cancel to abort)",
+        parse_mode="HTML"
     )
     return SKILL_TEXT
 
@@ -46,10 +50,10 @@ async def get_skill_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Stores the skill name and asks for a description."""
     context.user_data["skill_text"] = update.message.text
     await update.message.reply_text(
-        "2️⃣ **Now, elaborate a bit.**\n"
+        "2️⃣ <b>Now, elaborate a bit.</b>\n"
         "Describe exactly what you offer so people can find you easily.\n"
-        "_(Type /cancel to abort)_",
-        parse_mode="Markdown"
+        "(Type /cancel to abort)",
+        parse_mode="HTML"
     )
     return DESCRIPTION
 
@@ -57,8 +61,9 @@ async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Stores the description and asks for the fee."""
     context.user_data["description"] = update.message.text
     await update.message.reply_text(
-        "3️⃣ **How much do you charge?** (₹/Treat/Free)\n"
-        "_(Type /cancel to abort)_"
+        "3️⃣ <b>How much do you charge?</b> (₹/Treat/Free)\n"
+        "(Type /cancel to abort)",
+        parse_mode="HTML"
     )
     return FEE
 
@@ -90,14 +95,19 @@ async def get_fee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         await db_service.create_listing(listing)
 
+        skill_esc = escape(skill_text)
+        desc_esc = escape(description)
+        fee_esc = escape(fee_display)
+        coll_esc = escape(college)
+
         await status_msg.edit_text(
-            f"✅ **Skill Listed Successfully!**\n\n"
-            f"🛠 **{skill_text}**\n"
-            f"📝 {description}\n"
-            f"💰 {fee_display}\n"
-            f"🏫 {college}\n\n"
+            f"✅ <b>Skill Listed Successfully!</b>\n\n"
+            f"🛠 <b>{skill_esc}</b>\n"
+            f"📝 {desc_esc}\n"
+            f"💰 {fee_esc}\n"
+            f"🏫 {coll_esc}\n\n"
             "Students can now find you in /search!",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     except Exception as e:
         logger.error(f"Registration failed: {e}")
@@ -113,10 +123,10 @@ register_handler = ConversationHandler(
         FEE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_fee)],
     },
     fallbacks=[
-        CommandHandler("cancel", lambda u, c: ConversationHandler.END),
-        CommandHandler("search", lambda u, c: ConversationHandler.END),
-        CommandHandler("myskills", lambda u, c: ConversationHandler.END),
-        CommandHandler("register", lambda u, c: ConversationHandler.END),
+        CommandHandler("cancel", _cancel_fallback),
+        CommandHandler("search", _cancel_fallback),
+        CommandHandler("myskills", _cancel_fallback),
+        CommandHandler("register", _cancel_fallback),
     ],
     allow_reentry=True,
 )

@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS listings (
   created_at   TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Table: search_logs
+CREATE TABLE IF NOT EXISTS search_logs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  telegram_id  BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+  username     TEXT,
+  query        TEXT NOT NULL,
+  college      TEXT,
+  created_at   TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
 -- RPC Function for semantic search with college filtering
 CREATE OR REPLACE FUNCTION match_listings (
   query_embedding vector(768),
@@ -32,7 +42,8 @@ RETURNS TABLE (
   username TEXT,
   display_name TEXT,
   skill_text TEXT,
-  fee_text TEXT, -- Updated return type
+  description TEXT, -- Added description to return
+  fee_text TEXT,
   similarity float
 )
 LANGUAGE plpgsql
@@ -43,6 +54,7 @@ BEGIN
     u.username,
     u.display_name,
     l.skill_text,
+    l.description, -- Added description to select
     l.fee_text,
     1 - (l.embedding <=> query_embedding) AS similarity
   FROM listings l

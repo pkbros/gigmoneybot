@@ -38,3 +38,9 @@ Implement a Telegram-native micro-gig marketplace prototype (v0.1) for college c
 ### Phase 4: Webhook & Cloud Run Integration
 1. **Web Server Setup:** FastAPI endpoint for `/webhook`.
 2. **Lifecycle Management:** Automated `setWebhook` on startup.
+
+## Advanced Marketplace Features
+- **Global Skill Alerts:** If a search yields 0 results, the bot notifies all registered users across all colleges about the missing skill to encourage new listings.
+- **Campus Directory (`/allskills`):** Allows users to browse all available skills within their specific college (limit 100).
+- **Search Analytics:** Every search query is logged with the user's username and college to help administrators understand platform demand and identify popular missing skills.
+- **Strict Registration:** Enforces Telegram @username and college selection before listing or searching.

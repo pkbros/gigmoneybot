@@ -16,7 +16,7 @@ from telegram.ext import (
 from models.config import settings
 from handlers.base import start, start_profile, get_college, SET_COLLEGE, cancel
 from handlers.register import register_handler
-from handlers.search import search_handler, direct_search
+from handlers.search import search_handler, direct_search, show_all_college_skills
 from handlers.myskills import myskills_view_handler, deleteskill_handler
 
 # Configure logging
@@ -41,7 +41,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error("Exception while handling an update:", exc_info=context.error)
     if isinstance(update, Update) and update.effective_message:
         await update.effective_message.reply_text(
-            "❌ An unexpected error occurred. Please try again later or type /cancel to reset."
+            "❌ An unexpected error occurred. Please try again later or type /cancel to reset.",
+            parse_mode="HTML"
         )
 
 # Profile handler
@@ -56,6 +57,7 @@ profile_handler = ConversationHandler(
 
 # Register Handlers
 ptb_app.add_handler(CommandHandler("start", start))
+ptb_app.add_handler(CommandHandler("allskills", show_all_college_skills))
 ptb_app.add_handler(profile_handler)
 ptb_app.add_handler(register_handler)
 ptb_app.add_handler(search_handler)
@@ -79,6 +81,7 @@ async def lifespan(app: FastAPI):
         BotCommand("start", "Welcome and info"),
         BotCommand("register", "List a new skill"),
         BotCommand("search", "Find someone who can help"),
+        BotCommand("allskills", "Show all skills in your college"),
         BotCommand("myskills", "View your active listings"),
         BotCommand("deleteskill", "Delete a listing"),
         BotCommand("profile", "Update your college/profile"),
