@@ -21,9 +21,10 @@ class Listing(BaseModel):
     created_at: Optional[datetime] = None
 
 class SearchResult(BaseModel):
+    id: UUID
     username: Optional[str] = None
     display_name: Optional[str] = None
     skill_text: str
-    description: Optional[str] = None # Added description
+    description: Optional[str] = None
     fee_text: str
     similarity: float

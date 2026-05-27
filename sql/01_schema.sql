@@ -1,25 +1,56 @@
--- Enable pgvector extension
+-- Enable extensions
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm; -- Added for fuzzy keyword search
 
--- Table: users
-CREATE TABLE IF NOT EXISTS users (
-  telegram_id  BIGINT PRIMARY KEY,
-  username     TEXT,
+-- ... (tables remain the same)
+
+-- Create a GIST index for fast Trigram similarity searches on skill headings
+CREATE INDEX IF NOT EXISTS trgm_idx_listings_skill ON listings USING gist (skill_text gist_trgm_ops);
+
+-- RPC for Lightning Trigram Search (Fuzzy but Fast)
+-- Upgraded to search both heading and description
+CREATE OR REPLACE FUNCTION keyword_search_trigram(
+  query_text TEXT,
+  filter_college TEXT,
+  match_threshold FLOAT DEFAULT 0.2,
+  match_count INT DEFAULT 5
+)
+RETURNS TABLE (
+  id UUID,
+  username TEXT,
   display_name TEXT,
-  college      TEXT, -- Added college column
-  created_at   TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Table: listings
-CREATE TABLE IF NOT EXISTS listings (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  telegram_id  BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
-  skill_text   TEXT NOT NULL,
-  fee_text     TEXT NOT NULL, -- Changed from fee_inr INTEGER to fee_text TEXT
-  embedding    vector(768),
-  college      TEXT,
-  created_at   TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
+  skill_text TEXT,
+  description TEXT,
+  fee_text TEXT,
+  similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    l.id,
+    u.username,
+    u.display_name,
+    l.skill_text,
+    l.description,
+    l.fee_text,
+    GREATEST(
+      similarity(l.skill_text, query_text),
+      similarity(COALESCE(l.description, ''), query_text)
+    )::float AS similarity
+  FROM listings l
+  JOIN users u ON l.telegram_id = u.telegram_id
+  WHERE l.college = filter_college
+    AND (
+      LOWER(l.skill_text) % LOWER(query_text) -- Case-insensitive Trigram
+      OR l.skill_text ILIKE '%' || query_text || '%' -- Substring Heading
+      OR l.description ILIKE '%' || query_text || '%' -- Substring Description
+    )
+  ORDER BY similarity DESC
+  LIMIT match_count;
+END;
+$$;
 
 -- Table: search_logs
 CREATE TABLE IF NOT EXISTS search_logs (
@@ -39,10 +70,11 @@ CREATE OR REPLACE FUNCTION match_listings (
   filter_college TEXT
 )
 RETURNS TABLE (
+  id UUID, -- Added ID to return
   username TEXT,
   display_name TEXT,
   skill_text TEXT,
-  description TEXT, -- Added description to return
+  description TEXT,
   fee_text TEXT,
   similarity float
 )
@@ -51,10 +83,11 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
+    l.id, -- Added ID to select
     u.username,
     u.display_name,
     l.skill_text,
-    l.description, -- Added description to select
+    l.description,
     l.fee_text,
     1 - (l.embedding <=> query_embedding) AS similarity
   FROM listings l

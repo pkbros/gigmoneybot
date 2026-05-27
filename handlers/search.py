@@ -44,6 +44,7 @@ async def _execute_search(update: Update, query: str) -> int:
         return ConversationHandler.END
         
     college_escaped = escape(user.college)
+    print(f"[SEARCH] Start search for '{query}' in college '{user.college}'")
     status_msg = await update.message.reply_text(f"🔍 Searching in {college_escaped}...")
 
     # Log the search for analytics
@@ -55,10 +56,26 @@ async def _execute_search(update: Update, query: str) -> int:
     )
 
     try:
-        query_embedding = await ai_service.get_embedding(query, task_type="RETRIEVAL_QUERY")
-        results = await db_service.match_listings(query_embedding, college=user.college, threshold=0.75)
+        # 1. Try Lightning Keyword Search First
+        print(f"[SEARCH] Attempting Lightning Keyword Search...")
+        kw_results = await db_service.keyword_match_listings(query, user.college)
+        
+        results = []
+        if kw_results:
+            print(f"[SEARCH] Lightning Hit! Found {len(kw_results)} matches. Skipping AI.")
+            results = kw_results
+        else:
+            print(f"[SEARCH] No lightning hits. Waking up AI Brain...")
+            query_embedding = await ai_service.get_embedding(query, task_type="RETRIEVAL_QUERY")
+            results = await db_service.match_listings(
+                query_text=query,
+                query_embedding=query_embedding,
+                college=user.college,
+                threshold=0.6
+            )
 
         if not results:
+            print(f"[SEARCH] Zero results found for '{query}'. Sending alerts.")
             await status_msg.edit_text(
                 f"No one in <b>{college_escaped}</b> has listed that yet. 😕\n\n"
                 "📢 <b>Sending an alert...</b> I'll notify students across all campuses. "
@@ -68,6 +85,7 @@ async def _execute_search(update: Update, query: str) -> int:
             # Background Global Alert
             await _broadcast_search_alert(update, query)
         else:
+            print(f"[SEARCH] Returning {len(results)} results to user.")
             response = f"🔍 <b>Found {len(results)} students in {college_escaped} who can help:</b>\n\n"
             for i, res in enumerate(results, 1):
                 username_val = res.username if res.username else res.display_name
@@ -85,9 +103,14 @@ async def _execute_search(update: Update, query: str) -> int:
             await status_msg.edit_text(response, parse_mode="HTML")
             
     except Exception as e:
+        print(f"[ERROR] Search Logic Failed: {e}")
         logger.error(f"Search failed: {e}")
         await status_msg.edit_text("❌ Sorry, something went wrong while searching. Please try again later.")
 
+    return ConversationHandler.END
+
+async def _cancel_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Async fallback to end conversation."""
     return ConversationHandler.END
 
 async def _broadcast_search_alert(update: Update, skill_name: str) -> None:
@@ -120,7 +143,7 @@ async def _broadcast_search_alert(update: Update, skill_name: str) -> None:
             logger.warning(f"Failed to send alert to {user.telegram_id}: {e}")
 
 async def show_all_college_skills(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays all skills available in the user's college."""
+    """Displays all skills available in the user's college with the new 2-line layout."""
     user = await check_college(update, context)
     if not user:
         return
@@ -137,14 +160,27 @@ async def show_all_college_skills(update: Update, context: ContextTypes.DEFAULT_
 
         response = f"🏫 <b>Everything available in {college_escaped}:</b>\n\n"
         for i, res in enumerate(listings, 1):
+            username_val = res.username if res.username else res.display_name
+            username = f"@{escape(username_val)}" if res.username else escape(username_val)
             skill_text = escape(res.skill_text)
+            description = escape(res.description)
             fee_text = escape(res.fee_text)
-            response += f"{i}. <b>{skill_text}</b> — {fee_text}\n"
+
+            # Line 1: Username | Cost
+            response += f"{i}. {username} | 💰 {fee_text}\n"
+            # Line 2: Skill | Description
+            response += f"   <b>{skill_text}</b>"
+            if description:
+                response += f" — <i>{description}</i>"
+            
+            # Divider
+            response += "\n" + "—" * 20 + "\n"
         
-        response += "\n🔍 Use /search to find specific help or see details."
+        response += "\n🔍 Use /search to find specific help!"
         await status_msg.edit_text(response, parse_mode="HTML")
         
     except Exception as e:
+        print(f"[ERROR] show_all_college_skills: {e}")
         logger.error(f"Failed to fetch all skills: {e}")
         await status_msg.edit_text("❌ Failed to fetch the skill list. Please try again later.")
 
@@ -154,10 +190,10 @@ search_handler = ConversationHandler(
         SEARCH_QUERY: [MessageHandler(filters.TEXT & ~filters.COMMAND, perform_search)],
     },
     fallbacks=[
-        CommandHandler("cancel", lambda u, c: ConversationHandler.END),
-        CommandHandler("register", lambda u, c: ConversationHandler.END),
-        CommandHandler("myskills", lambda u, c: ConversationHandler.END),
-        CommandHandler("search", lambda u, c: ConversationHandler.END),
+        CommandHandler("cancel", _cancel_fallback),
+        CommandHandler("register", _cancel_fallback),
+        CommandHandler("myskills", _cancel_fallback),
+        CommandHandler("search", _cancel_fallback),
     ],
     allow_reentry=True,
 )
